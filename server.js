@@ -195,6 +195,12 @@ app.post('/api/vote', (req, res) => {
     res.json({ success: true, block: newBlock });
 });
 
+// --- Catch API Errors ---
+// Important: If an API route is missing, return JSON 404, not HTML
+app.all('/api/*', (req, res) => {
+    res.status(404).json({ error: "API Endpoint not found" });
+});
+
 // Fallback for SPA routing
 app.get('*', (req, res) => {
     const indexPath = path.join(distPath, 'index.html');

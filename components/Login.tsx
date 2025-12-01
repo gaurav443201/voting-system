@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, UserRole, ADMIN_EMAILS } from '../types';
-import { Mail, ShieldCheck, Lock, ArrowRight, Building, CheckCircle, X, Loader2 } from 'lucide-react';
+import { Mail, ShieldCheck, Lock, ArrowRight, Building, CheckCircle, X, Loader2, AlertTriangle } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -37,14 +37,28 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         body: JSON.stringify({ email: lowerEmail })
       });
 
+      // Check content type to ensure we got JSON (not an HTML error page from Render/Nginx)
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+          const text = await res.text();
+          console.error("Non-JSON Response:", text);
+          throw new Error(`Server returned ${res.status} ${res.statusText}. The backend might be starting up or crashed.`);
+      }
+
       const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || `Server Error: ${res.status}`);
+      }
+
       if (data.success) {
         setStep('OTP');
       } else {
-        setError(data.error || "Failed to send OTP. Check console/logs.");
+        setError(data.error || "Failed to send OTP.");
       }
-    } catch (err) {
-      setError("Network error. Cannot reach server.");
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      setError(err.message || "Network connection failed.");
     } finally {
       setIsLoading(false);
     }
@@ -62,6 +76,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: lowerEmail, otp })
       });
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+          throw new Error(`Server communication failed (${res.status}).`);
+      }
 
       const data = await res.json();
       
@@ -85,8 +104,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       } else {
         setError(data.error || "Invalid OTP");
       }
-    } catch (err) {
-      setError("Verification failed.");
+    } catch (err: any) {
+      setError(err.message || "Verification failed.");
     } finally {
       setIsLoading(false);
     }
@@ -142,9 +161,9 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
               )}
 
               {error && (
-                <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg flex items-center gap-2">
-                  <X className="w-4 h-4 text-red-500 shrink-0" />
-                  <p className="text-red-400 text-sm">{error}</p>
+                <div className="p-3 bg-red-900/30 border border-red-800 rounded-lg flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-red-400 text-sm break-words leading-tight">{error}</p>
                 </div>
               )}
 

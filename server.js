@@ -17,8 +17,8 @@ app.use(express.static(path.join(__dirname, 'dist')));
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: process.env.EMAIL_USER, // Add this in Render Environment Variables
-        pass: process.env.EMAIL_PASS  // Add this in Render Environment Variables (App Password)
+        user: process.env.EMAIL_USER, 
+        pass: process.env.EMAIL_PASS
     }
 });
 
@@ -53,8 +53,9 @@ function createBlock(data, previousHash) {
     return { index, timestamp, data, previousHash, hash, nonce };
 }
 
-// Genesis Block
+// Genesis Block - Init Immediately
 chain.push(createBlock({ voterId: "GENESIS", candidateId: "GENESIS" }, "0"));
+console.log("Blockchain initialized with Genesis Block");
 
 // --- API Routes ---
 
@@ -77,9 +78,9 @@ app.post('/api/auth/send-otp', async (req, res) => {
         expires: Date.now() + 5 * 60 * 1000 
     });
 
-    console.log(`Generating OTP for ${email}: ${otp}`);
+    console.log(`[AUTH] Generated OTP for ${email}: ${otp}`);
 
-    // If Credentials exist, send real email. Otherwise log it.
+    // If Credentials exist, try to send real email
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
         try {
             await transporter.sendMail({
@@ -88,16 +89,24 @@ app.post('/api/auth/send-otp', async (req, res) => {
                 subject: 'VIT ChainVote Verification Code',
                 text: `Your OTP for VIT ChainVote is: ${otp}\n\nThis code is valid for 5 minutes.`
             });
-            console.log(`Email sent to ${email}`);
+            console.log(`[AUTH] Email sent successfully to ${email}`);
             res.json({ success: true, message: "OTP sent to email" });
         } catch (error) {
-            console.error("Failed to send email:", error);
-            res.status(500).json({ error: "Failed to send email. Please check server logs." });
+            console.error("[AUTH] Failed to send email via SMTP:", error);
+            // Fallback: Don't block the user, just log it so admin can debug, and let user use the logged OTP
+            res.json({ 
+                success: true, 
+                message: "OTP Generated but Email failed (Check Logs)", 
+                warning: "Email sending failed. OTP logged in server console for testing." 
+            });
         }
     } else {
-        console.log("WARNING: EMAIL_USER/PASS not set. OTP logged to console only.");
-        // We still return success so the app works for testing without config
-        res.json({ success: true, message: "OTP generated (Check Server Logs - Email Config Missing)" });
+        console.log("[AUTH] EMAIL_USER/PASS not set in environment. OTP logged to console only.");
+        res.json({ 
+            success: true, 
+            message: "OTP generated (Dev Mode)", 
+            warning: "Email not configured. Check Server Logs for OTP." 
+        });
     }
 });
 
@@ -126,24 +135,22 @@ app.post('/api/auth/verify-otp', (req, res) => {
 // 4. Admin: Toggle Voting
 app.post('/api/admin/toggle', (req, res) => {
     votingActive = !votingActive;
-    console.log(`Voting toggled: ${votingActive}`);
+    console.log(`[ADMIN] Voting toggled: ${votingActive}`);
     res.json({ success: true, votingActive });
 });
 
 // 5. Admin: Add Candidate
 app.post('/api/admin/candidate', (req, res) => {
-    console.log("Received Add Candidate Request");
+    console.log("[ADMIN] Received Add Candidate Request");
     const candidate = req.body;
     
     if (!candidate || !candidate.id) {
         return res.status(400).json({ error: "Invalid candidate data" });
     }
     
-    // Add to memory
     candidates.push({ ...candidate, voteCount: 0 });
-    console.log(`Candidate Added: ${candidate.name}. Total: ${candidates.length}`);
+    console.log(`[ADMIN] Candidate Added: ${candidate.name}. Total Candidates: ${candidates.length}`);
     
-    // Return updated list immediately
     res.json({ success: true, candidates });
 });
 
@@ -178,15 +185,17 @@ app.post('/api/vote', (req, res) => {
     candidates = candidates.map(c => 
         c.id === candidateId ? { ...c, voteCount: c.voteCount + 1 } : c
     );
+    
+    console.log(`[VOTE] Vote cast for candidate ${candidateId}`);
 
     res.json({ success: true, block: newBlock });
 });
 
-// Fallback
+// Fallback for SPA routing
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`[SERVER] Running on port ${PORT}`);
 });

@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
@@ -11,7 +12,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'dist')));
+
+// Serve static files from the build directory
+const distPath = path.join(__dirname, 'dist');
+app.use(express.static(distPath));
 
 // --- EMAIL CONFIGURATION ---
 const transporter = nodemailer.createTransport({
@@ -193,9 +197,37 @@ app.post('/api/vote', (req, res) => {
 
 // Fallback for SPA routing
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+    const indexPath = path.join(distPath, 'index.html');
+    
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        // Helpful error for deployment issues
+        res.status(404).send(`
+            <div style="font-family: sans-serif; padding: 40px; text-align: center; color: #333;">
+                <h1 style="color: #e11d48;">Frontend Build Not Found</h1>
+                <p>The server cannot find the <code>dist/index.html</code> file.</p>
+                <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; display: inline-block; text-align: left;">
+                    <strong>Possible Fixes for Render:</strong>
+                    <ol>
+                        <li>Ensure "Build Command" is: <code>npm install && npm run build</code></li>
+                        <li>Ensure "Start Command" is: <code>npm start</code></li>
+                        <li>Check "Logs" for build errors.</li>
+                    </ol>
+                </div>
+            </div>
+        `);
+    }
 });
 
 app.listen(PORT, () => {
     console.log(`[SERVER] Running on port ${PORT}`);
+    
+    // Diagnostic check on startup
+    if (!fs.existsSync(path.join(distPath, 'index.html'))) {
+        console.warn("⚠️  WARNING: 'dist/index.html' not found. The frontend will not load.");
+        console.warn("   Make sure to run 'npm run build' before starting the server.");
+    } else {
+        console.log("✅ Frontend build detected.");
+    }
 });

@@ -4,6 +4,7 @@ import { Login } from './components/Login';
 import { AdminDashboard } from './components/AdminDashboard';
 import { VotingBooth } from './components/VotingBooth';
 import { Results } from './components/Results';
+import { Loader2 } from 'lucide-react';
 
 // Helper to hash email client-side for "hasVoted" check (UI only)
 async function hashEmail(email: string): Promise<string> {
@@ -169,7 +170,18 @@ const App: React.FC = () => {
 
   // Render Logic
   const renderContent = () => {
-    if (isLoading && !user) return <div className="text-white p-10 text-center">Loading Election Data...</div>;
+    if (isLoading && !user) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-4 text-center">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+                <h2 className="text-xl font-bold mb-2">Connecting to Secure Server...</h2>
+                <p className="text-slate-400 text-sm max-w-md">
+                    If this takes longer than 10 seconds, the server might be waking up (Render Free Tier). 
+                    Please wait up to 1 minute.
+                </p>
+            </div>
+        );
+    }
 
     switch (appState) {
       case AppState.LOGIN:

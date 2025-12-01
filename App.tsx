@@ -112,14 +112,23 @@ const App: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(candidate)
       });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Server Error: ${res.status} ${errorText}`);
+      }
+
       const data = await res.json();
       if (data.success) {
         setCandidates(data.candidates); // Immediate UI update from response
+        // alert("Candidate added successfully!"); // Optional: Uncomment if you want success popups
+      } else {
+        alert("Failed to add candidate: " + (data.error || "Unknown error"));
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Add candidate failed", e);
+      alert("Error connecting to server: " + e.message);
     }
-    // No need to call fetchState() because we used the response data
   };
 
   const handleRemoveCandidate = async (id: string) => {

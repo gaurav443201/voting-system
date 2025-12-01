@@ -62,17 +62,24 @@ app.get('/api/state', (req, res) => {
 // Admin: Toggle Voting
 app.post('/api/admin/toggle', (req, res) => {
     votingActive = !votingActive;
+    console.log(`Voting toggled: ${votingActive}`);
     res.json({ success: true, votingActive });
 });
 
 // Admin: Add Candidate
 app.post('/api/admin/candidate', (req, res) => {
+    console.log("Received Add Candidate Request");
     const candidate = req.body;
+    
     // Basic validation
     if (!candidate || !candidate.id) {
+        console.error("Invalid candidate data received:", req.body);
         return res.status(400).json({ error: "Invalid candidate data" });
     }
+    
     candidates.push({ ...candidate, voteCount: 0 });
+    console.log(`Candidate Added: ${candidate.name}. Total Candidates: ${candidates.length}`);
+    
     res.json({ success: true, candidates });
 });
 

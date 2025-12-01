@@ -46,7 +46,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setNewName('');
     } catch (error) {
       console.error("Failed to add candidate:", error);
-      alert("Failed to add candidate. Please check your connection and try again.");
+      // Alert handled in App.tsx now
     } finally {
       setLoadingAi(false);
     }

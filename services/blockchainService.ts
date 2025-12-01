@@ -1,6 +1,9 @@
 import { Block, BlockData } from '../types';
 
-// Simple SHA-256 implementation for browser compatibility
+// Client-side helper class. 
+// Note: The actual "Source of Truth" is now the Server's chain.
+// This class can be used to locally verify the chain integrity if needed.
+
 async function sha256(message: string): Promise<string> {
   const msgBuffer = new TextEncoder().encode(message);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -11,68 +14,16 @@ async function sha256(message: string): Promise<string> {
 
 export class BlockchainService {
   public chain: Block[];
-  public difficulty: number;
 
   constructor() {
     this.chain = [];
-    this.difficulty = 2; // Low difficulty for instant UI feedback
   }
 
-  async createGenesisBlock(): Promise<Block> {
-    const genesisBlock = await this.createBlock({
-      voterId: "GENESIS",
-      candidateId: "GENESIS",
-      timestamp: Date.now()
-    }, "0");
-    this.chain.push(genesisBlock);
-    return genesisBlock;
-  }
-
-  async createBlock(data: BlockData, previousHash: string): Promise<Block> {
-    let nonce = 0;
-    let hash = "";
-    const index = this.chain.length;
-    const timestamp = Date.now();
-
-    // Simple Proof of Work simulation
-    while (true) {
-      const input = index + previousHash + timestamp + JSON.stringify(data) + nonce;
-      hash = await sha256(input);
-      if (hash.substring(0, this.difficulty) === Array(this.difficulty + 1).join("0")) {
-        break;
-      }
-      nonce++;
-    }
-
-    return {
-      index,
-      timestamp,
-      data,
-      previousHash,
-      hash,
-      nonce
-    };
-  }
-
-  async addVote(voterEmail: string, candidateId: string): Promise<Block> {
-    const previousBlock = this.chain[this.chain.length - 1];
-    
-    // Anonymize voter
-    const voterHash = await sha256(voterEmail); 
-
-    const newBlock = await this.createBlock(
-      { voterId: voterHash, candidateId, timestamp: Date.now() },
-      previousBlock.hash
-    );
-    
-    this.chain.push(newBlock);
-    return newBlock;
-  }
-
-  async isChainValid(): Promise<boolean> {
-    for (let i = 1; i < this.chain.length; i++) {
-      const currentBlock = this.chain[i];
-      const previousBlock = this.chain[i - 1];
+  // Purely for client-side verification of the data fetched from server
+  async isChainValid(serverChain: Block[]): Promise<boolean> {
+    for (let i = 1; i < serverChain.length; i++) {
+      const currentBlock = serverChain[i];
+      const previousBlock = serverChain[i - 1];
 
       if (currentBlock.previousHash !== previousBlock.hash) {
         return false;
@@ -87,11 +38,6 @@ export class BlockchainService {
       }
     }
     return true;
-  }
-
-  hasVoted(voterHash: string): boolean {
-    // Check all blocks except genesis
-    return this.chain.slice(1).some(block => block.data.voterId === voterHash);
   }
 }
 

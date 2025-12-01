@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { User, Candidate, Block, AppState, UserRole } from './types';
-import { blockchainInstance } from './services/blockchainService';
 import { Login } from './components/Login';
 import { AdminDashboard } from './components/AdminDashboard';
 import { VotingBooth } from './components/VotingBooth';
 import { Results } from './components/Results';
+
+// Helper to hash email client-side for "hasVoted" check (UI only)
+async function hashEmail(email: string): Promise<string> {
+    const msgBuffer = new TextEncoder().encode(email.toLowerCase().trim());
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -13,43 +20,81 @@ const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.LOGIN);
   const [votingActive, setVotingActive] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize Blockchain
+  // --- POLLING: Fetch State from Server ---
+  const fetchState = async () => {
+    try {
+      const res = await fetch('/api/state');
+      if (res.ok) {
+        const data = await res.json();
+        setCandidates(data.candidates);
+        setChain(data.chain);
+        setVotingActive(data.votingActive);
+        
+        // If user is logged in, check if they are in the updated chain
+        if (user && user.role !== UserRole.ADMIN) {
+           const myHash = await hashEmail(user.email);
+           const voted = data.chain.slice(1).some((b: Block) => b.data.voterId === myHash);
+           setHasVoted(voted);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch state", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Initial load and Polling interval
   useEffect(() => {
-    const initChain = async () => {
-      await blockchainInstance.createGenesisBlock();
-      setChain([...blockchainInstance.chain]);
-    };
-    initChain();
-  }, []);
+    fetchState();
+    const interval = setInterval(fetchState, 2000); // Poll every 2 seconds
+    return () => clearInterval(interval);
+  }, [user]); // Re-run polling logic check if user changes
 
-  // Handle Login
+  // Handle Login Logic
   const handleLogin = async (loggedInUser: User) => {
     setUser(loggedInUser);
     
     if (loggedInUser.role === UserRole.ADMIN) {
       setAppState(AppState.ADMIN);
     } else {
-      // Check if user has already voted by checking the chain for their hashed email
-      // In a real app, verify hash consistency. Here we simulate.
-      // We need to re-hash the email to check against the chain
-      const emailHashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(loggedInUser.email));
-      const hashArray = Array.from(new Uint8Array(emailHashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      
-      const alreadyVoted = blockchainInstance.hasVoted(hashHex);
-      setHasVoted(alreadyVoted);
-
-      if (!votingActive && !alreadyVoted) {
-          // If voting closed and user hasn't voted, they might just see results if allowed, 
-          // or a "closed" screen. 
-          // For this app logic: If closed, show Results/End Screen.
-          setAppState(AppState.RESULTS);
-      } else {
-          setAppState(AppState.VOTING);
+      // Logic to determine initial screen based on server state
+      if (loggedInUser.role === UserRole.VOTER) {
+          const myHash = await hashEmail(loggedInUser.email);
+          const voted = chain.slice(1).some((b: Block) => b.data.voterId === myHash);
+          setHasVoted(voted);
+          
+          if (voted) {
+             // If already voted, show results/thanks depending on state
+             setAppState(AppState.VOTING); // VotingBooth handles "Already Voted" UI
+          } else if (!votingActive) {
+             // Election not started or ended
+             setAppState(AppState.RESULTS);
+          } else {
+             setAppState(AppState.VOTING);
+          }
       }
     }
   };
+
+  // Effect to handle State Transitions based on Server Data
+  useEffect(() => {
+     if (!user) return;
+     
+     if (user.role === UserRole.VOTER) {
+        if (hasVoted) {
+           // Stay on Voting Booth (it shows receipt) or Results
+           if (!votingActive) setAppState(AppState.RESULTS);
+           else setAppState(AppState.VOTING);
+        } else {
+           if (votingActive) setAppState(AppState.VOTING);
+           else setAppState(AppState.RESULTS); // or a "Waiting for start" screen
+        }
+     }
+  }, [votingActive, hasVoted, user]);
+
 
   const handleLogout = () => {
     setUser(null);
@@ -57,39 +102,48 @@ const App: React.FC = () => {
     setHasVoted(false);
   };
 
-  // Admin Actions
-  const handleAddCandidate = (candidate: Candidate) => {
-    setCandidates([...candidates, candidate]);
+  // --- Server Actions ---
+
+  const handleAddCandidate = async (candidate: Candidate) => {
+    await fetch('/api/admin/candidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(candidate)
+    });
+    fetchState(); // Immediate refresh
   };
 
-  const handleRemoveCandidate = (id: string) => {
-    setCandidates(candidates.filter(c => c.id !== id));
+  const handleRemoveCandidate = async (id: string) => {
+    await fetch(`/api/admin/candidate/${id}`, { method: 'DELETE' });
+    fetchState();
   };
 
-  const toggleVoting = () => {
-    setVotingActive(!votingActive);
+  const toggleVoting = async () => {
+    await fetch('/api/admin/toggle', { method: 'POST' });
+    fetchState();
   };
 
-  // Voting Action
   const handleVote = async (candidateId: string) => {
     if (!user || !user.email) return;
 
-    // 1. Add block to chain
-    await blockchainInstance.addVote(user.email, candidateId);
-    
-    // 2. Update local chain state
-    setChain([...blockchainInstance.chain]);
+    const res = await fetch('/api/vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, candidateId })
+    });
 
-    // 3. Update candidate count (Visualization only, truth is in chain)
-    setCandidates(prev => prev.map(c => 
-      c.id === candidateId ? { ...c, voteCount: c.voteCount + 1 } : c
-    ));
-
-    setHasVoted(true);
+    if (res.ok) {
+        setHasVoted(true);
+        fetchState();
+    } else {
+        alert("Voting failed or you have already voted.");
+    }
   };
 
   // Render Logic
   const renderContent = () => {
+    if (isLoading && !user) return <div className="text-white p-10 text-center">Loading Election Data...</div>;
+
     switch (appState) {
       case AppState.LOGIN:
         return <Login onLogin={handleLogin} />;
@@ -108,21 +162,9 @@ const App: React.FC = () => {
         );
 
       case AppState.VOTING:
-        // If voting is stopped and user is logged in as voter, show results
+        // Even if AppState is VOTING, if election stopped and user hasn't voted, show wait/results
         if (!votingActive && !hasVoted) {
-            return <VotingBooth 
-                user={user!} 
-                candidates={candidates} 
-                onVote={handleVote} 
-                hasVoted={hasVoted} 
-                onLogout={handleLogout}
-                electionEnded={true}
-            />;
-        }
-        // If user already voted, stay on booth to show success message, 
-        // or redirect to results if election is over. 
-        if (hasVoted && !votingActive) {
-            return <Results candidates={candidates} chain={chain} onLogout={handleLogout} />;
+             return <Results candidates={candidates} chain={chain} onLogout={handleLogout} />;
         }
         
         return (

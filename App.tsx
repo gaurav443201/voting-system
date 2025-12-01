@@ -121,7 +121,9 @@ const App: React.FC = () => {
       const data = await res.json();
       if (data.success) {
         setCandidates(data.candidates); // Immediate UI update from response
-        // alert("Candidate added successfully!"); // Optional: Uncomment if you want success popups
+        alert("Candidate added successfully!"); 
+        // Force a re-fetch to ensure sync
+        fetchState();
       } else {
         alert("Failed to add candidate: " + (data.error || "Unknown error"));
       }

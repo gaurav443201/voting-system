@@ -1,106 +1,99 @@
 import React, { useState } from 'react';
 import { User, UserRole, ADMIN_EMAILS } from '../types';
-import { Mail, ShieldCheck, Lock, ArrowRight, Building, CheckCircle, X } from 'lucide-react';
+import { Mail, ShieldCheck, Lock, ArrowRight, Building, CheckCircle, X, Loader2 } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: User) => void;
 }
 
-// Regex format: name.prn@vit.edu (e.g., student.123456@vit.edu)
-// Strictly enforces: letters + dot + numbers + @vit.edu
 const STUDENT_EMAIL_REGEX = /^[a-zA-Z]+\.[0-9]+@vit\.edu$/;
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [step, setStep] = useState<'EMAIL' | 'OTP'>('EMAIL');
   const [otp, setOtp] = useState('');
-  const [generatedOtp, setGeneratedOtp] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [selectedDept, setSelectedDept] = useState('CSE');
   
-  // New state for on-screen OTP notification
-  const [showOtpNotification, setShowOtpNotification] = useState(false);
-
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     setError('');
-    setShowOtpNotification(false);
-    
     const lowerEmail = email.toLowerCase().trim();
 
-    // Check for Admin
-    if (ADMIN_EMAILS.includes(lowerEmail)) {
-      const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedOtp(mockOtp);
-      setStep('OTP');
-      setShowOtpNotification(true); // Show OTP on screen
+    // Validation
+    const isAdmin = ADMIN_EMAILS.includes(lowerEmail);
+    const isStudent = STUDENT_EMAIL_REGEX.test(lowerEmail);
+
+    if (!isAdmin && !isStudent) {
+      setError('Invalid Email. Format must be: name.prn@vit.edu (e.g., prem.1251040044@vit.edu)');
       return;
     }
 
-    // Check for Student (Strict Format)
-    if (STUDENT_EMAIL_REGEX.test(lowerEmail)) {
-      const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedOtp(mockOtp);
-      setStep('OTP');
-      setShowOtpNotification(true); // Show OTP on screen
-      return;
-    }
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: lowerEmail })
+      });
 
-    setError('Invalid Email. Format must be: name.prn@vit.edu (e.g., student.123456@vit.edu)');
+      const data = await res.json();
+      if (data.success) {
+        setStep('OTP');
+      } else {
+        setError(data.error || "Failed to send OTP. Check console/logs.");
+      }
+    } catch (err) {
+      setError("Network error. Cannot reach server.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleVerifyOtp = () => {
-    if (otp === generatedOtp) {
+  const handleVerifyOtp = async () => {
+    if (!otp) return;
+    setIsLoading(true);
+    setError('');
+
+    try {
       const lowerEmail = email.toLowerCase().trim();
-      const isAdmin = ADMIN_EMAILS.includes(lowerEmail);
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: lowerEmail, otp })
+      });
+
+      const data = await res.json();
       
-      let userData: User = {
-        email: lowerEmail,
-        role: isAdmin ? UserRole.ADMIN : UserRole.VOTER,
-        isVerified: true,
-        department: selectedDept
-      };
+      if (data.success) {
+        // Login Successful
+        const isAdmin = ADMIN_EMAILS.includes(lowerEmail);
+        let userData: User = {
+          email: lowerEmail,
+          role: isAdmin ? UserRole.ADMIN : UserRole.VOTER,
+          isVerified: true,
+          department: selectedDept
+        };
 
-      if (!isAdmin) {
-        // Extract name and PRN from email
-        const [localPart] = lowerEmail.split('@');
-        const [name, prn] = localPart.split('.');
-        userData = { ...userData, name, prn };
+        if (!isAdmin) {
+          const [localPart] = lowerEmail.split('@');
+          const [name, prn] = localPart.split('.');
+          userData = { ...userData, name, prn };
+        }
+        
+        onLogin(userData);
+      } else {
+        setError(data.error || "Invalid OTP");
       }
-
-      onLogin(userData);
-    } else {
-      setError('Invalid OTP. Please try again.');
+    } catch (err) {
+      setError("Verification failed.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4">
-      {/* Global OTP Notification - Fixed position ensures visibility */}
-      {showOtpNotification && (
-        <div className="fixed top-0 left-0 right-0 bg-green-600 p-4 text-white shadow-2xl z-[100] animate-in slide-in-from-top-full duration-300">
-          <div className="max-w-md mx-auto flex justify-between items-center">
-            <div className="flex gap-3 items-center">
-              <div className="bg-white/20 p-2 rounded-full">
-                  <Mail className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-bold text-sm uppercase tracking-wide opacity-90">Simulation OTP</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-mono font-bold">{generatedOtp}</span>
-                  <span className="text-xs opacity-75">(Backend not connected)</span>
-                </div>
-              </div>
-            </div>
-            <button 
-              onClick={() => setShowOtpNotification(false)} 
-              className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="max-w-md w-full bg-slate-800 rounded-2xl shadow-2xl overflow-hidden border border-slate-700 relative z-10">
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-center pt-10">
           <ShieldCheck className="w-12 h-12 text-white mx-auto mb-3" />
@@ -157,9 +150,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
               <button
                 onClick={handleSendOtp}
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                disabled={isLoading}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
-                Send OTP <ArrowRight className="w-4 h-4" />
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Send OTP <ArrowRight className="w-4 h-4" /></>}
               </button>
             </div>
           ) : (
@@ -193,9 +187,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
               <button
                 onClick={handleVerifyOtp}
-                className="w-full bg-green-600 hover:bg-green-500 text-white font-semibold py-3 rounded-lg transition-colors shadow-lg shadow-green-900/20"
+                disabled={isLoading}
+                className="w-full bg-green-600 hover:bg-green-500 disabled:bg-green-800 text-white font-semibold py-3 rounded-lg transition-colors shadow-lg shadow-green-900/20 flex items-center justify-center gap-2"
               >
-                Verify & Login
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify & Login"}
               </button>
               
               <button 
@@ -203,7 +198,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   setStep('EMAIL');
                   setOtp('');
                   setError('');
-                  setShowOtpNotification(false);
                 }}
                 className="w-full text-slate-400 hover:text-white text-sm py-2"
               >

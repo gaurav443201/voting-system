@@ -25,7 +25,8 @@ const App: React.FC = () => {
   // --- POLLING: Fetch State from Server ---
   const fetchState = async () => {
     try {
-      const res = await fetch('/api/state');
+      // Add timestamp to prevent caching: ?t=12345678
+      const res = await fetch(`/api/state?t=${Date.now()}`);
       if (res.ok) {
         const data = await res.json();
         setCandidates(data.candidates);
@@ -105,17 +106,32 @@ const App: React.FC = () => {
   // --- Server Actions ---
 
   const handleAddCandidate = async (candidate: Candidate) => {
-    await fetch('/api/admin/candidate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(candidate)
-    });
-    fetchState(); // Immediate refresh
+    try {
+      const res = await fetch('/api/admin/candidate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(candidate)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCandidates(data.candidates); // Immediate UI update from response
+      }
+    } catch (e) {
+      console.error("Add candidate failed", e);
+    }
+    // No need to call fetchState() because we used the response data
   };
 
   const handleRemoveCandidate = async (id: string) => {
-    await fetch(`/api/admin/candidate/${id}`, { method: 'DELETE' });
-    fetchState();
+    try {
+      const res = await fetch(`/api/admin/candidate/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setCandidates(data.candidates); // Immediate UI update from response
+      }
+    } catch (e) {
+      console.error("Remove candidate failed", e);
+    }
   };
 
   const toggleVoting = async () => {

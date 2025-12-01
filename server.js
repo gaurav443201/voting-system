@@ -88,12 +88,12 @@ app.post('/api/auth/send-otp', async (req, res) => {
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
         try {
             await transporter.sendMail({
-                from: process.env.EMAIL_USER,
+                from: '"VIT ChainVote Admin" <navgharegaurav80@gmail.com>', // Explicitly set the sender
                 to: email,
                 subject: 'VIT ChainVote Verification Code',
                 text: `Your OTP for VIT ChainVote is: ${otp}\n\nThis code is valid for 5 minutes.`
             });
-            console.log(`[AUTH] Email sent successfully to ${email}`);
+            console.log(`[AUTH] Email sent successfully to ${email} from navgharegaurav80@gmail.com`);
             res.json({ success: true, message: "OTP sent to email" });
         } catch (error) {
             console.error("[AUTH] Failed to send email via SMTP:", error);

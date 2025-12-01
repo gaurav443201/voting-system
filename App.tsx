@@ -4,7 +4,7 @@ import { Login } from './components/Login';
 import { AdminDashboard } from './components/AdminDashboard';
 import { VotingBooth } from './components/VotingBooth';
 import { Results } from './components/Results';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Server } from 'lucide-react';
 
 // Helper to hash email client-side for "hasVoted" check (UI only)
 async function hashEmail(email: string): Promise<string> {
@@ -22,6 +22,9 @@ const App: React.FC = () => {
   const [votingActive, setVotingActive] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Loading UX state
+  const [loadingMsg, setLoadingMsg] = useState("Connecting to Secure Server...");
 
   // --- POLLING: Fetch State from Server ---
   const fetchState = async () => {
@@ -52,7 +55,18 @@ const App: React.FC = () => {
   useEffect(() => {
     fetchState();
     const interval = setInterval(fetchState, 2000); // Poll every 2 seconds
-    return () => clearInterval(interval);
+    
+    // Cold Start Timer Messages
+    const t1 = setTimeout(() => setLoadingMsg("Waking up Render Server (Free Tier)..."), 3000);
+    const t2 = setTimeout(() => setLoadingMsg("Still connecting... This usually takes ~50 seconds for cold start."), 12000);
+    const t3 = setTimeout(() => setLoadingMsg("Almost there! Thank you for your patience."), 40000);
+
+    return () => {
+        clearInterval(interval);
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+    };
   }, [user]); // Re-run polling logic check if user changes
 
   // Handle Login Logic
@@ -173,12 +187,22 @@ const App: React.FC = () => {
     if (isLoading && !user) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-4 text-center">
-                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-4" />
-                <h2 className="text-xl font-bold mb-2">Connecting to Secure Server...</h2>
-                <p className="text-slate-400 text-sm max-w-md">
-                    If this takes longer than 10 seconds, the server might be waking up (Render Free Tier). 
-                    Please wait up to 1 minute.
-                </p>
+                <div className="relative mb-6">
+                    <div className="absolute inset-0 bg-blue-500 blur-xl opacity-20 rounded-full"></div>
+                    <Loader2 className="w-12 h-12 animate-spin text-blue-500 relative z-10" />
+                </div>
+                <h2 className="text-xl font-bold mb-3 flex items-center gap-2">
+                    <Server className="w-5 h-5 text-slate-400" /> 
+                    {loadingMsg}
+                </h2>
+                <div className="max-w-md bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                    <p className="text-slate-400 text-xs leading-relaxed">
+                        If this is the first time you are opening the app after a while, 
+                        the cloud server is likely in "Sleep Mode". It takes about 
+                        <span className="text-white font-bold"> 60 seconds </span> to wake up.
+                        Please do not refresh the page.
+                    </p>
+                </div>
             </div>
         );
     }

@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Candidate, Block } from '../types';
 import { generateManifesto } from '../services/geminiService';
-import { Plus, Trash2, Power, PlayCircle, StopCircle, Sparkles, Share2, Check, Copy, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, PlayCircle, StopCircle, Sparkles, Share2, Check, Trophy } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface AdminDashboardProps {
   candidates: Candidate[];
-  onAddCandidate: (c: Candidate) => Promise<void>; // Updated to return Promise
+  onAddCandidate: (c: Candidate) => Promise<void>; 
   onRemoveCandidate: (id: string) => void;
   votingActive: boolean;
   onToggleVoting: () => void;
@@ -27,6 +28,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [loadingAi, setLoadingAi] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
+  const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#10b981'];
+
+  // Calculate winner
+  const winner = useMemo(() => {
+    if (candidates.length === 0) return null;
+    const hasVotes = candidates.some(c => c.voteCount > 0);
+    if (!hasVotes) return null;
+    return candidates.reduce((prev, current) => (prev.voteCount > current.voteCount) ? prev : current);
+  }, [candidates]);
+
   const handleAdd = async () => {
     if (!newName) return;
     
@@ -46,7 +57,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setNewName('');
     } catch (error) {
       console.error("Failed to add candidate:", error);
-      // Alert handled in App.tsx now
     } finally {
       setLoadingAi(false);
     }
@@ -78,6 +88,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             Logout
           </button>
         </header>
+
+        {/* --- RESULTS SECTION (Visible only when Ended) --- */}
+        {!votingActive && chain.length > 1 && (
+          <div className="mb-10 bg-slate-800 rounded-2xl border border-slate-700 p-8 shadow-xl relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-6 opacity-10">
+                <Trophy className="w-32 h-32 text-yellow-500" />
+             </div>
+             <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+                <Trophy className="text-yellow-500" /> Election Results & Winner
+             </h2>
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                {/* Winner Card */}
+                {winner ? (
+                  <div className="bg-gradient-to-br from-yellow-900/40 to-slate-900 border border-yellow-700/50 p-6 rounded-xl flex flex-col items-center justify-center text-center">
+                      <div className="w-20 h-20 bg-yellow-500 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-yellow-500/50">
+                          <Trophy className="w-10 h-10 text-slate-900" />
+                      </div>
+                      <h3 className="text-yellow-500 font-bold uppercase text-sm mb-1">Official Winner</h3>
+                      <h4 className="text-3xl font-bold text-white mb-1">{winner.name}</h4>
+                      <p className="text-yellow-200/80 mb-4">{winner.department} Representative</p>
+                      <div className="bg-slate-900/60 px-6 py-2 rounded-full border border-yellow-700/30">
+                          <span className="text-2xl font-bold text-white">{winner.voteCount}</span> <span className="text-slate-400 text-sm">Votes</span>
+                      </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-slate-500">No votes cast.</div>
+                )}
+
+                {/* Graph */}
+                <div className="h-[250px] w-full bg-slate-900/50 p-4 rounded-xl border border-slate-700">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={candidates}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                            <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} />
+                            <YAxis stroke="#94a3b8" allowDecimals={false} fontSize={12} tickLine={false} />
+                            <Tooltip 
+                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', color: '#f8fafc' }}
+                                cursor={{ fill: '#334155', opacity: 0.4 }}
+                            />
+                            <Bar dataKey="voteCount" radius={[4, 4, 0, 0]}>
+                                {candidates.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+             </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Controls */}

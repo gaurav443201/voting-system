@@ -23,13 +23,13 @@ function sha256(message) {
     return crypto.createHash('sha256').update(message).digest('hex');
 }
 
-// Helper: Create Block
-async function createBlock(data, previousHash) {
+// Helper: Create Block (Synchronous for simplicity in this demo)
+function createBlock(data, previousHash) {
     const index = chain.length;
     const timestamp = Date.now();
     let nonce = 0;
     let hash = "";
-    const difficulty = 2;
+    const difficulty = 2; // Low difficulty for instant mining in demo
 
     // Proof of Work
     while (true) {
@@ -44,11 +44,9 @@ async function createBlock(data, previousHash) {
     return { index, timestamp, data, previousHash, hash, nonce };
 }
 
-// Initialize Genesis Block
-(async () => {
-    const genesis = await createBlock({ voterId: "GENESIS", candidateId: "GENESIS" }, "0");
-    chain.push(genesis);
-})();
+// Initialize Genesis Block Immediately (Synchronously)
+// This prevents the "Total Votes: -1" issue by ensuring chain is never empty.
+chain.push(createBlock({ voterId: "GENESIS", candidateId: "GENESIS" }, "0"));
 
 // --- API Routes ---
 
@@ -70,6 +68,10 @@ app.post('/api/admin/toggle', (req, res) => {
 // Admin: Add Candidate
 app.post('/api/admin/candidate', (req, res) => {
     const candidate = req.body;
+    // Basic validation
+    if (!candidate || !candidate.id) {
+        return res.status(400).json({ error: "Invalid candidate data" });
+    }
     candidates.push({ ...candidate, voteCount: 0 });
     res.json({ success: true, candidates });
 });
@@ -82,7 +84,7 @@ app.delete('/api/admin/candidate/:id', (req, res) => {
 });
 
 // Voter: Cast Vote
-app.post('/api/vote', async (req, res) => {
+app.post('/api/vote', (req, res) => {
     if (!votingActive) {
         return res.status(400).json({ error: "Voting is closed." });
     }
@@ -100,7 +102,7 @@ app.post('/api/vote', async (req, res) => {
 
     // Add to Blockchain
     const previousBlock = chain[chain.length - 1];
-    const newBlock = await createBlock(
+    const newBlock = createBlock(
         { voterId: voterHash, candidateId, timestamp: Date.now() },
         previousBlock.hash
     );

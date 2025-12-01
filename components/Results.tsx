@@ -22,7 +22,8 @@ export const Results: React.FC<ResultsProps> = ({ candidates, chain, onLogout })
 
   // Trigger AI analysis on mount
   useEffect(() => {
-    if (winner && chain.length > 1) { // >1 to account for genesis
+    // Only analyze if there are actual votes (chain length > 1 for genesis)
+    if (winner && chain.length > 1) {
       setLoadingAnalysis(true);
       analyzeResults(candidates, chain, winner)
         .then(setAnalysis)
@@ -89,7 +90,10 @@ export const Results: React.FC<ResultsProps> = ({ candidates, chain, onLogout })
                 <div className="grid grid-cols-2 gap-4">
                      <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                          <p className="text-slate-500 text-xs uppercase font-bold">Total Votes</p>
-                         <p className="text-2xl font-bold text-white mt-1">{chain.length - 1}</p>
+                         <p className="text-2xl font-bold text-white mt-1">
+                           {/* Ensure non-negative display */}
+                           {Math.max(0, chain.length - 1)}
+                         </p>
                      </div>
                      <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                          <p className="text-slate-500 text-xs uppercase font-bold">Chain Height</p>

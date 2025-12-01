@@ -5,7 +5,7 @@ import { Plus, Trash2, Power, PlayCircle, StopCircle, Sparkles, Share2, Check, C
 
 interface AdminDashboardProps {
   candidates: Candidate[];
-  onAddCandidate: (c: Candidate) => void;
+  onAddCandidate: (c: Candidate) => Promise<void>; // Updated to return Promise
   onRemoveCandidate: (id: string) => void;
   votingActive: boolean;
   onToggleVoting: () => void;
@@ -31,23 +31,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (!newName) return;
     
     setLoadingAi(true);
-    const manifesto = await generateManifesto(newName, newDept);
-    setLoadingAi(false);
+    try {
+      const manifesto = await generateManifesto(newName, newDept);
 
-    const newCandidate: Candidate = {
-      id: Date.now().toString(),
-      name: newName,
-      department: newDept,
-      manifesto: manifesto,
-      voteCount: 0
-    };
+      const newCandidate: Candidate = {
+        id: Date.now().toString(),
+        name: newName,
+        department: newDept,
+        manifesto: manifesto,
+        voteCount: 0
+      };
 
-    onAddCandidate(newCandidate);
-    setNewName('');
+      await onAddCandidate(newCandidate);
+      setNewName('');
+    } catch (error) {
+      console.error("Failed to add candidate:", error);
+      alert("Failed to add candidate. Please check your connection and try again.");
+    } finally {
+      setLoadingAi(false);
+    }
   };
 
   const getCleanShareUrl = () => {
-    // robustly get base URL without hash or search params that might cause 404s in some environments
     return `${window.location.protocol}//${window.location.host}${window.location.pathname}`;
   };
 
